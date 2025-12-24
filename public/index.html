@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Git-Style Diff Checker</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+      background: #0d1117;
+      color: #c9d1d9;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 1600px;
+      margin: 0 auto;
+      background: #161b22;
+      border-radius: 6px;
+      border: 1px solid #30363d;
+      overflow: hidden;
+    }
+
+    .header {
+      background: linear-gradient(135deg, #1f6feb 0%, #0969da 100%);
+      color: white;
+      padding: 24px 30px;
+      border-bottom: 1px solid #30363d;
+    }
+
+    .header h1 {
+      font-size: 24px;
+      margin-bottom: 4px;
+      font-weight: 600;
+    }
+
+    .header p {
+      font-size: 14px;
+      opacity: 0.9;
+    }
+
+    .input-section {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1px;
+      background: #30363d;
+      border-bottom: 1px solid #30363d;
+    }
+
+    .input-container {
+      display: flex;
+      flex-direction: column;
+      background: #0d1117;
+      padding: 16px;
+    }
+
+    .input-container label {
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: #8b949e;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .input-container textarea {
+      width: 100%;
+      height: 300px;
+      padding: 12px;
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      color: #c9d1d9;
+      font-family: 'SF Mono', 'Monaco', 'Cascadia Code', 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      resize: vertical;
+      transition: border-color 0.2s;
+    }
+
+    .input-container textarea:focus {
+      outline: none;
+      border-color: #1f6feb;
+    }
+
+    .controls {
+      padding: 16px 20px;
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      flex-wrap: wrap;
+      background: #161b22;
+      border-bottom: 1px solid #30363d;
+    }
+
+    button {
+      padding: 8px 16px;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-family: inherit;
+    }
+
+    .btn-primary {
+      background: #238636;
+      color: white;
+      border-color: #238636;
+    }
+
+    .btn-primary:hover {
+      background: #2ea043;
+      border-color: #2ea043;
+    }
+
+    .btn-secondary {
+      background: #21262d;
+      color: #c9d1d9;
+      border-color: #30363d;
+    }
+
+    .btn-secondary:hover {
+      background: #30363d;
+      border-color: #8b949e;
+    }
+
+    .results-section {
+      display: none;
+      background: #0d1117;
+    }
+
+    .results-section.active {
+      display: block;
+    }
+
+    .file-header {
+      padding: 16px 20px;
+      background: #161b22;
+      border-bottom: 1px solid #30363d;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .stats {
+      display: flex;
+      gap: 16px;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .stat-badge {
+      padding: 4px 8px;
+      border-radius: 12px;
+      font-size: 12px;
+    }
+
+    .stat-badge.added {
+      background: rgba(46, 160, 67, 0.15);
+      color: #3fb950;
+    }
+
+    .stat-badge.deleted {
+      background: rgba(248, 81, 73, 0.15);
+      color: #f85149;
+    }
+
+    .merge-controls {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .diff-container {
+      font-family: 'SF Mono', 'Monaco', 'Cascadia Code', 'Courier New', monospace;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .hunk {
+      margin: 20px 0;
+    }
+
+    .hunk-header {
+      background: #1c2128;
+      color: #8b949e;
+      padding: 6px 16px;
+      font-size: 12px;
+      border-top: 1px solid #30363d;
+      border-bottom: 1px solid #30363d;
+      font-weight: 600;
+    }
+
+    .diff-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .diff-row {
+      display: grid;
+      grid-template-columns: 50px 50px 1fr;
+    }
+
+    .line-number {
+      padding: 0 10px;
+      text-align: right;
+      color: #6e7681;
+      user-select: none;
+      background: #161b22;
+      border-right: 1px solid #30363d;
+      font-size: 12px;
+      min-width: 50px;
+    }
+
+    .line-content {
+      padding: 0 10px;
+      white-space: pre-wrap;
+      word-break: break-all;
+      overflow-wrap: break-word;
+    }
+
+    .diff-row.context {
+      color: #c9d1d9;
+    }
+
+    .diff-row.added {
+      background: rgba(46, 160, 67, 0.15);
+    }
+
+    .diff-row.added .line-content {
+      color: #c9d1d9;
+    }
+
+    .diff-row.added .line-number {
+      background: rgba(46, 160, 67, 0.15);
+    }
+
+    .diff-row.deleted {
+      background: rgba(248, 81, 73, 0.15);
+    }
+
+    .diff-row.deleted .line-content {
+      color: #c9d1d9;
+    }
+
+    .diff-row.deleted .line-number {
+      background: rgba(248, 81, 73, 0.15);
+    }
+
+    .diff-row.modified {
+      background: rgba(187, 128, 9, 0.15);
+    }
+
+    .diff-row.modified .line-number {
+      background: rgba(187, 128, 9, 0.15);
+    }
+
+    .inline-added {
+      background: rgba(46, 160, 67, 0.4);
+      padding: 0 2px;
+    }
+
+    .inline-deleted {
+      background: rgba(248, 81, 73, 0.4);
+      padding: 0 2px;
+    }
+
+    .diff-indicator {
+      width: 20px;
+      padding: 0 8px;
+      font-weight: bold;
+      user-select: none;
+    }
+
+    .diff-row.added .diff-indicator::before {
+      content: '+';
+      color: #3fb950;
+    }
+
+    .diff-row.deleted .diff-indicator::before {
+      content: '-';
+      color: #f85149;
+    }
+
+    .empty-state {
+      padding: 60px 20px;
+      text-align: center;
+      color: #8b949e;
+    }
+
+    .empty-state svg {
+      width: 64px;
+      height: 64px;
+      margin-bottom: 16px;
+      opacity: 0.5;
+    }
+
+    @media (max-width: 768px) {
+      .input-section {
+        grid-template-columns: 1fr;
+      }
+      
+      .diff-row {
+        grid-template-columns: 40px 40px 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>🔍 Git-Style Diff Checker</h1>
+      <p>Compare code with GitHub-style diff view</p>
+    </div>
+
+    <div class="input-section">
+      <div class="input-container">
+        <label>Original Code (Left)</label>
+        <textarea id="leftText" placeholder="Paste your original code here..."></textarea>
+      </div>
+      <div class="input-container">
+        <label>Modified Code (Right)</label>
+        <textarea id="rightText" placeholder="Paste your modified code here..."></textarea>
+      </div>
+    </div>
+
+    <div class="controls">
+      <button class="btn-primary" onclick="findDifferences()">Compare Files</button>
+      <button class="btn-secondary" onclick="clearAll()">Clear</button>
+    </div>
+
+    <div id="resultsSection" class="results-section">
+      <div class="file-header">
+        <div class="stats" id="stats"></div>
+        <div class="merge-controls">
+          <button class="btn-secondary" onclick="mergeLeftToRight()">← Merge Left to Right</button>
+          <button class="btn-secondary" onclick="mergeRightToLeft()">Merge Right to Left →</button>
+          <button class="btn-secondary" onclick="downloadMerged('left')">⬇️ Download Left</button>
+          <button class="btn-secondary" onclick="downloadMerged('right')">⬇️ Download Right</button>
+        </div>
+      </div>
+
+      <div class="diff-container" id="diffContainer"></div>
+    </div>
+  </div>
+
+  <script>
+    let diffData = null;
+    let leftContent = '';
+    let rightContent = '';
+
+    async function findDifferences() {
+      leftContent = document.getElementById('leftText').value;
+      rightContent = document.getElementById('rightText').value;
+
+      if (!leftContent && !rightContent) {
+        alert('Please enter text in at least one field');
+        return;
+      }
+
+      try {
+        const response = await fetch('/api/diff', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ left: leftContent, right: rightContent })
+        });
+
+        diffData = await response.json();
+        displayDiff();
+      } catch (error) {
+        console.error('Error:', error);
+        alert('Error calculating differences. Make sure the server is running.');
+      }
+    }
+
+    function displayDiff() {
+      const container = document.getElementById('diffContainer');
+      const resultsSection = document.getElementById('resultsSection');
+      const statsDiv = document.getElementById('stats');
+
+      container.innerHTML = '';
+
+      if (diffData.hunks.length === 0) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <svg viewBox="0 0 16 16" fill="currentColor">
+              <path d="M13.78 4.22a.75.75 0 010 1.06l-7.25 7.25a.75.75 0 01-1.06 0L2.22 9.28a.75.75 0 011.06-1.06L6 10.94l6.72-6.72a.75.75 0 011.06 0z"></path>
+            </svg>
+            <h3>No differences found</h3>
+            <p>Both files are identical</p>
+          </div>
+        `;
+      } else {
+        diffData.hunks.forEach((hunk, hunkIdx) => {
+          const hunkDiv = document.createElement('div');
+          hunkDiv.className = 'hunk';
+          
+          const hunkHeader = document.createElement('div');
+          hunkHeader.className = 'hunk-header';
+          hunkHeader.textContent = `@@ -${hunk.leftStart},${hunk.lines.length} +${hunk.rightStart},${hunk.lines.length} @@`;
+          hunkDiv.appendChild(hunkHeader);
+
+          hunk.lines.forEach(line => {
+            const row = document.createElement('div');
+            row.className = 'diff-row';
+
+            if (line.type === 'equal') {
+              row.classList.add('context');
+              row.innerHTML = `
+                <div class="line-number">${line.leftLine || ''}</div>
+                <div class="line-number">${line.rightLine || ''}</div>
+                <div class="line-content">${escapeHtml(line.left || line.right)}</div>
+              `;
+            } else if (line.type === 'deleted') {
+              row.classList.add(line.isModified ? 'modified' : 'deleted');
+              const content = line.inlineDiff ? renderInlineDiff(line.inlineDiff) : escapeHtml(line.left);
+              row.innerHTML = `
+                <div class="line-number">${line.leftLine || ''}</div>
+                <div class="line-number"></div>
+                <div class="line-content"><span class="diff-indicator"></span>${content}</div>
+              `;
+            } else if (line.type === 'added') {
+              row.classList.add(line.isModified ? 'modified' : 'added');
+              const content = line.inlineDiff ? renderInlineDiff(line.inlineDiff) : escapeHtml(line.right);
+              row.innerHTML = `
+                <div class="line-number"></div>
+                <div class="line-number">${line.rightLine || ''}</div>
+                <div class="line-content"><span class="diff-indicator"></span>${content}</div>
+              `;
+            }
+
+            hunkDiv.appendChild(row);
+          });
+
+          container.appendChild(hunkDiv);
+        });
+      }
+
+      statsDiv.innerHTML = `
+        <span class="stat-badge added">+${diffData.stats.added} additions</span>
+        <span class="stat-badge deleted">-${diffData.stats.deleted} deletions</span>
+      `;
+
+      resultsSection.classList.add('active');
+    }
+
+    function renderInlineDiff(parts) {
+      return parts.map(part => {
+        const escaped = escapeHtml(part.text);
+        if (part.type === 'added') {
+          return `<span class="inline-added">${escaped}</span>`;
+        } else if (part.type === 'deleted') {
+          return `<span class="inline-deleted">${escaped}</span>`;
+        }
+        return escaped;
+      }).join('');
+    }
+
+    function escapeHtml(text) {
+      if (!text) return '';
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    function mergeLeftToRight() {
+      document.getElementById('rightText').value = leftContent;
+      rightContent = leftContent;
+      alert('✓ Merged left to right!');
+    }
+
+    function mergeRightToLeft() {
+      document.getElementById('leftText').value = rightContent;
+      leftContent = rightContent;
+      alert('✓ Merged right to left!');
+    }
+
+    function downloadMerged(side) {
+      const content = side === 'left' ? leftContent : rightContent;
+      const blob = new Blob([content], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `code_${side}_${Date.now()}.txt`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    function clearAll() {
+      document.getElementById('leftText').value = '';
+      document.getElementById('rightText').value = '';
+      document.getElementById('resultsSection').classList.remove('active');
+      leftContent = '';
+      rightContent = '';
+      diffData = null;
+    }
+  </script>
+</body>
+</html>
